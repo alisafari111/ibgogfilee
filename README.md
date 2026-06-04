@@ -1,4 +1,7 @@
-<img width="640" height="172" alt="icon" src="https://github.com/user-attachments/assets/be1ba4ad-406b-4323-afb8-ccb08187b4e8" />
+<div align="center">
+  <img width="640" height="172" alt="icon" src="https://github.com/user-attachments/assets/be1ba4ad-406b-4323-afb8-ccb08187b4e8" />
+</div>
 
 # دانلودر گوگل درایو با اینترنت ملی 
+با استفاده از این ریپازیتوری شما میتوانید فایل های درون گوگل درایو را به درون گیتهاب خود منتقل کرده و آنها را به راحتی دانلود کنید. این پروژه برای واکشی لیست تمام فایل های درون پوشه های گوگل درایور و همچنین دانلود سالم همه ی آنها طراحی شده است.
 
