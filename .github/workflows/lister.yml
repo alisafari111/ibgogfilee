@@ -1,0 +1,64 @@
+name: 01- 📝 لیست کردن فایلها
+
+on:
+  workflow_dispatch:
+    inputs:
+      folder_url:
+        description: 'Google Drive FOLDER URL (for single files, use Download workflow directly)'
+        required: true
+        type: string
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install gdown
+        run: pip install gdown
+
+      - name: List Google Drive folder contents
+        run: python scripts/list_drive.py "${{ github.event.inputs.folder_url }}"
+
+      - name: Clean up any partial downloads
+        run: |
+          # Remove any partial files that may have started downloading
+          find . -not -path "./.git/*" \( \
+            -name "*.mov" -o -name "*.mp4" -o -name "*.avi" \
+            -o -name "*.jpg" -o -name "*.jpeg" -o -name "*.png" \
+            -o -name "*.zip" -o -name "*.pdf" -o -name "*.mkv" \
+          \) -delete 2>/dev/null || true
+
+      - name: Display summary
+        run: |
+          echo "=== list.txt preview (first 20 lines) ==="
+          head -20 list.txt
+          echo "..."
+          echo "Total entries: $(wc -l < list.txt)"
+
+      - name: Commit list.txt to repository
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add list.txt
+          if git diff --staged --quiet; then
+            echo "No changes to list.txt"
+          else
+            FILE_COUNT=$(wc -l < list.txt)
+            git commit -m "📋 Listed $FILE_COUNT files from Google Drive folder"
+            git push
+            echo "Done — $FILE_COUNT entries committed."
+          fi
