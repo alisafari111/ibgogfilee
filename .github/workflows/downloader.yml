@@ -1,0 +1,117 @@
+name: 02- 💾 دانلود از گوگل درایو
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Number of files to download per run (default: 60)'
+        required: false
+        default: '60'
+        type: string
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install gdown --upgrade
+          sudo apt-get install -y rar
+
+      - name: Check list.txt exists
+        id: check_list
+        run: |
+          if [ ! -f "list.txt" ] || [ ! -s "list.txt" ]; then
+            echo "has_work=false" >> $GITHUB_OUTPUT
+          else
+            TOTAL=$(grep -c "=" list.txt || echo 0)
+            echo "has_work=true"  >> $GITHUB_OUTPUT
+            echo "total=$TOTAL"   >> $GITHUB_OUTPUT
+          fi
+
+      - name: Show instructions if list.txt is missing
+        if: steps.check_list.outputs.has_work == 'false'
+        run: |
+          echo "============================================================"
+          echo "⚠️  list.txt is empty or missing!"
+          echo ""
+          echo "📋 Please run the LIST workflow first:"
+          echo "   1. Go to Actions → '00 __ LIST GOOGLE DRIVE LINKS'"
+          echo "   2. Enter your Google Drive folder/file URL"
+          echo "   3. Run the workflow to generate list.txt"
+          echo "   4. Then run this download workflow again"
+          echo "============================================================"
+
+          # Create a job summary for GitHub Actions UI
+          echo "## ⚠️ list.txt is missing!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Please run the **LIST** workflow first to generate \`list.txt\`:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Go to **Actions** → **'00 __ LIST GOOGLE DRIVE LINKS'**" >> $GITHUB_STEP_SUMMARY
+          echo "2. Enter your Google Drive folder or file URL" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run the workflow to generate \`list.txt\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. Then run this download workflow again" >> $GITHUB_STEP_SUMMARY
+
+          exit 1
+
+      - name: Download batch
+        if: steps.check_list.outputs.has_work == 'true'
+        id: download
+        run: |
+          python scripts/download_drive.py ${{ github.event.inputs.batch_size || '60' }}
+
+      - name: Generate summary
+        if: steps.check_list.outputs.has_work == 'true'
+        run: |
+          if [ -f "done.txt" ]; then
+            DONE=$(grep "^done:" done.txt | cut -d: -f2 || echo "0")
+            TOTAL=$(grep "^all:" done.txt | cut -d: -f2 || echo "0")
+            REMAINING=$((TOTAL - DONE))
+
+            echo "## 📥 Download Progress" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Total files | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+            echo "| Downloaded | $DONE |" >> $GITHUB_STEP_SUMMARY
+            echo "| Remaining | $REMAINING |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "$REMAINING" -eq 0 ]; then
+              echo "### 🎉 All files downloaded!" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "### ⏳ $REMAINING files remaining" >> $GITHUB_STEP_SUMMARY
+              echo "Run this workflow again to continue downloading." >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+      - name: Commit downloaded files
+        if: steps.check_list.outputs.has_work == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add --force .
+          if git diff --staged --quiet; then
+            echo "Nothing new to commit."
+          else
+            DONE=$(grep "^done:" done.txt | cut -d: -f2 || echo "?")
+            TOTAL=$(grep "^all:" done.txt | cut -d: -f2 || echo "?")
+            git commit -m "📥 Downloaded batch — $DONE / $TOTAL files complete"
+            git push
+            echo "Committed successfully."
+          fi
